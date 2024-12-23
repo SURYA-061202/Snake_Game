@@ -1,149 +1,294 @@
-const gameBoard = document.getElementById('gameBoard');
-const context = gameBoard.getContext('2d');
-const scoreText = document.getElementById('scoreVal');
-
-const WIDTH = gameBoard.width;
-const HEIGHT = gameBoard.height; 
-const UNIT = 25;
-
-let foodX;
-let foodY;
-let xVel = 25;
-let yVel = 0;
-let score = 0;
-let active=true;
-let started = false;
-let paused = false;
-
-let snake = [
-    {x:UNIT*3,y:0},
-    {x:UNIT*2,y:0},
-    {x:UNIT,y:0},
-    {x:0,y:0}
-];
-window.addEventListener('keydown',keyPress);
-startGame();
-
-function startGame(){
-    context.fillStyle = '#212121';
-    //fillRect(xStart,yStart,width,height)
-    context.fillRect(0,0,WIDTH,HEIGHT);
-    createFood();
-    displayFood();
-    drawSnake();
-}
-
-function clearBoard(){
-    context.fillStyle = '#212121';
-    //fillRect(xStart,yStart,width,height)
-    context.fillRect(0,0,WIDTH,HEIGHT);
-}
-
-function createFood(){
-    foodX = Math.floor(Math.random()*WIDTH/UNIT)*UNIT;
-    foodY = Math.floor(Math.random()*HEIGHT/UNIT)*UNIT;
-}
-
-function displayFood(){
-    context.fillStyle = 'red';
-    context.fillRect(foodX,foodY,UNIT,UNIT)
-}
-
-function drawSnake(){
-    context.fillStyle = 'aqua';
-    context.strokeStyle = '#212121';
-    snake.forEach((snakePart) => {
-        context.fillRect(snakePart.x,snakePart.y,UNIT,UNIT)
-        context.strokeRect(snakePart.x,snakePart.y,UNIT,UNIT)
-    })
-}
-
-function moveSnake(){
-    const head = {x:snake[0].x+xVel,
-                    y:snake[0].y+yVel}
-    snake.unshift(head)
-    if(snake[0].x==foodX && snake[0].y==foodY){
-        score += 1;
-        scoreText.textContent = score;
-        createFood();
+(function () {
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+  
+    // canvas size
+    const canvasSize = 680;
+    const w = (canvas.width = canvasSize);
+    const h = (canvas.height = canvasSize);
+    const canvasFillColor = "#000d36";
+    const canvasStrokeColor = "rgba(211, 211, 211, 0.19)";
+  
+    const scoreEl = document.getElementById("score");
+    const resetEl = document.getElementById("reset");
+    const showGridEl = document.getElementById("show-grid");
+    const highScoreEl = document.getElementById("high-score");
+    const pauseEl = document.getElementById("pause");
+    const playEl = document.getElementById("play");
+  
+    let score = 0;
+  
+    const setScore = () => {
+      scoreEl.innerHTML = `Score 👉 ${score}`;
+      if (score >= localStorage.getItem("highScore"))
+        localStorage.setItem("highScore", score);
+      highScoreEl.innerHTML = `HI SCORE 🚀 ${localStorage.getItem("highScore")}`;
+    };
+  
+    // frame rate
+    const frameRate = 9.5;
+  
+    // grid padding
+    const pGrid = 4;
+    // grid width
+    const grid_line_len = canvasSize - 2 * pGrid;
+    //  cell count
+    const cellCount = 44;
+    // cell size
+    const cellSize = grid_line_len / cellCount;
+  
+    let gameActive;
+  
+    // this will generate random color for head
+    const randomColor = () => {
+      let color;
+      let colorArr = ["#426ff5", "#42f5e3"];
+      color = colorArr[Math.floor(Math.random() * 2)];
+      return color;
+    };
+  
+    const head = {
+      x: 2,
+      y: 1,
+      color: randomColor(),
+      vX: 0,
+      vY: 0,
+      draw: () => {
+        ctx.fillStyle = head.color;
+        ctx.shadowColor = head.color;
+        ctx.shadowBlur = 2.5;
+        ctx.fillRect(
+          head.x * cellSize + pGrid,
+          head.y * cellSize + pGrid,
+          cellSize,
+          cellSize
+        );
+      },
+    };
+  
+    let tailLength = 4;
+    let snakeParts = [];
+    class Tail {
+      color = "#42f57e";
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+      }
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 2.5;
+        ctx.fillRect(
+          this.x * cellSize + pGrid,
+          this.y * cellSize + pGrid,
+          cellSize,
+          cellSize
+        );
+      }
     }
-    else
-        snake.pop();
-}
-
-function nextTick(){
-    if(active && !paused){
-        setTimeout(() => {
-            clearBoard();
-            displayFood();
-            moveSnake();
-            drawSnake();
-            checkGameOver();
-            nextTick();
-        }, 200);
-    }
-    else if(!active){
-        clearBoard();
-        context.font = "bold 50px serif";
-        context.fillStyle = "white";
-        context.textAlign = "center";
-        context.fillText("Game Over!!",WIDTH/2,HEIGHT/2)
-    }
-}
-
-function keyPress(event){
-    if(!started){
-        started = true;
-        nextTick();
-    }
-    //pause when space is pressed
-    if(event.keyCode===32){
-        console.log('clicked')
-        if(paused){
-            paused = false;
-            nextTick();
+  
+    const food = {
+      x: 5,
+      y: 5,
+      color: "#FF3131",
+      draw: () => {
+        ctx.fillStyle = food.color;
+        ctx.shadowColor = food.color;
+        ctx.shadowBlur = 5;
+        ctx.fillRect(
+          food.x * cellSize + pGrid,
+          food.y * cellSize + pGrid,
+          cellSize,
+          cellSize
+        );
+      },
+    };
+  
+    // this will set canvas style
+    const setCanvas = () => {
+      // canvas fill
+      ctx.fillStyle = canvasFillColor;
+      ctx.fillRect(0, 0, w, h);
+  
+      // canvas stroke
+      ctx.strokeStyle = canvasStrokeColor;
+      ctx.strokeRect(0, 0, w, h);
+    };
+  
+    //   this will draw the grid
+    const drawGrid = () => {
+      ctx.beginPath();
+      for (let i = 0; i <= grid_line_len; i += cellSize) {
+        ctx.moveTo(i + pGrid, pGrid);
+        ctx.lineTo(i + pGrid, grid_line_len + pGrid);
+      }
+      for (let i = 0; i <= grid_line_len; i += cellSize) {
+        ctx.moveTo(pGrid, i + pGrid);
+        ctx.lineTo(grid_line_len + pGrid, i + pGrid);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = canvasStrokeColor;
+      ctx.stroke();
+    };
+  
+    const drawSnake = () => {
+      //loop through our snakeparts array
+      snakeParts.forEach((part) => {
+        part.draw();
+      });
+  
+      snakeParts.push(new Tail(head.x, head.y));
+  
+      if (snakeParts.length > tailLength) {
+        snakeParts.shift(); //remove furthest item from  snake part if we have more than our tail size
+      }
+      head.color = randomColor();
+      head.draw();
+    };
+  
+    const updateSnakePosition = () => {
+      head.x += head.vX;
+      head.y += head.vY;
+    };
+  
+    const changeDir = (e) => {
+      let key = e.keyCode;
+  
+      if (key == 68 || key == 39) {
+        if (head.vX === -1) return;
+        head.vX = 1;
+        head.vY = 0;
+        gameActive = true;
+        return;
+      }
+      if (key == 65 || key == 37) {
+        if (head.vX === 1) return;
+        head.vX = -1;
+        head.vY = 0;
+        gameActive = true;
+        return;
+      }
+      if (key == 87 || key == 38) {
+        if (head.vY === 1) return;
+        head.vX = 0;
+        head.vY = -1;
+        gameActive = true;
+        return;
+      }
+      if (key == 83 || key == 40) {
+        if (head.vY === -1) return;
+        head.vX = 0;
+        head.vY = 1;
+        gameActive = true;
+        return;
+      }
+    };
+  
+    const foodCollision = () => {
+      let foodCollision = false;
+      snakeParts.forEach((part) => {
+        if (part.x == food.x && part.y == food.y) {
+          foodCollision = true;
         }
-        else{
-            paused = true;
+      });
+      if (foodCollision) {
+        food.x = Math.floor(Math.random() * cellCount);
+        food.y = Math.floor(Math.random() * cellCount);
+        score++;
+        tailLength++;
+      }
+    };
+  
+    const isGameOver = () => {
+      let gameOver = false;
+  
+      snakeParts.forEach((part) => {
+        if (part.x == head.x && part.y == head.y) {
+          gameOver = true;
         }
-    }
-    const LEFT = 37
-    const UP = 38
-    const RIGHT = 39
-    const DOWN = 40
-
-    switch(true){
-        //left key pressed and not going right
-        case(event.keyCode==LEFT  && xVel!=UNIT):
-            xVel=-UNIT;
-            yVel = 0;
-            break;
-        //right key pressed and not going left
-        case(event.keyCode==RIGHT && xVel!=-UNIT):
-            xVel=UNIT;
-            yVel=0;
-            break;
-        //Up key pressed and not going down
-        case(event.keyCode==UP && yVel!=UNIT):
-            xVel=0;
-            yVel=-UNIT;
-            break;
-        //down key pressed and not going up
-        case(event.keyCode==DOWN && yVel!=-UNIT):
-            xVel=0;
-            yVel=UNIT;
-            break;
-
-    }
-}
-
-function checkGameOver(){
-    switch(true){
-        case(snake[0].x<0):
-        case(snake[0].x>=WIDTH):
-        case(snake[0].y<0):
-        case(snake[0].y>=HEIGHT):
-            active=false;
-            break;
-    }
-}
+      });
+  
+      if (
+        head.x < 0 ||
+        head.y < 0 ||
+        head.x > cellCount - 1 ||
+        head.y > cellCount - 1
+      ) {
+        gameOver = true;
+      }
+  
+      return gameOver;
+    };
+  
+    const showGameOver = () => {
+      const text = document.createElement("div");
+      text.setAttribute("id", "game_over");
+      text.innerHTML = "game over !";
+      const body = document.querySelector("body");
+      body.appendChild(text);
+    };
+  
+    addEventListener("keydown", changeDir);
+  
+    const PlayButton = (show) => {
+      if (!show) {
+        playEl.style.display = "none";
+      } else {
+        playEl.style.display = "block";
+      }
+    };
+  
+    const pauseGame = () => {
+      gameActive = false;
+      if(!gameActive) {
+        pauseEl.removeAttribute('class');
+        pauseEl.setAttribute('class', 'pause-not-active')
+      }
+      if (!isGameOver()) PlayButton(true);
+    };
+  
+    pauseEl.addEventListener("click", pauseGame);
+  
+    let showGrid = false;
+  
+    // this will initiate all
+    const animate = () => {
+      setCanvas();
+      if (showGrid) drawGrid();
+      drawSnake();
+      food.draw();
+      if (gameActive) {
+        PlayButton(false);
+        pauseEl.removeAttribute('class');
+        pauseEl.setAttribute('class','pause-active');
+        updateSnakePosition();
+        if (isGameOver()) {
+          showGameOver();
+          PlayButton(false);
+          return;
+        }
+      }
+      setScore();
+      foodCollision();
+      setTimeout(animate, 1000 / frameRate);
+    };
+  
+    const resetGame = () => {
+      location.reload();
+    };
+  
+    resetEl.addEventListener("click", resetGame);
+  
+    const toggleGrid = () => {
+      if (!showGrid) {
+        showGrid = true;
+        showGridEl.innerHTML = `Hide Grid`
+        return;
+      }
+      showGrid = false;
+      showGridEl.innerHTML=`Show Grid`
+    };
+  
+    showGridEl.addEventListener("click", toggleGrid);
+    animate();
+  })();
